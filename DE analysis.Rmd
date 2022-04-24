@@ -229,19 +229,19 @@ EnhancedVolcano(resIHW_join_unshrunken,
 Need to change the colors of to top_annotation. 
 ```{r Heatmap,message=FALSE, warning=FALSE}
 library(ComplexHeatmap)
-normalized_counts <- read.table("normalized_counts.txt")
-normalized_counts <- cbind(normalized_counts, gene_id = row.names(normalized_counts))
-normalized_counts <- merge (x = CRC_gene, y= normalized_counts, by= "gene_id")
-normalized_counts <- normalized_counts[normalized_counts$gene_id %in% sigIHW$gene_id ,]
+normalized_counts <- read.table("normalized_counts.txt")                                                              #Load in normalized_counts
+normalized_counts <- cbind(normalized_counts, gene_id = row.names(normalized_counts))                                 
+normalized_counts <- merge (x = CRC_gene, y= normalized_counts, by= "gene_id")                                        #Merge df's by gene_id
+normalized_counts <- normalized_counts[normalized_counts$gene_id %in% sigIHW$gene_id ,]                               #Select significant genes
 normalized_counts <- subset(normalized_counts, gene_id != "ENSG00000274701")                                          #Metazoa_SRP change removal
-normalized_counts <- subset(normalized_counts, gene_id != "ENSG00000277250")
+normalized_counts <- subset(normalized_counts, gene_id != "ENSG00000277250")              
 row.names(normalized_counts) <- normalized_counts$gene_name
-normalized_counts <- subset(normalized_counts, select = -c(gene_id, gene_name))
-normalized_counts <- t(scale(t(normalized_counts)))
+normalized_counts <- subset(normalized_counts, select = -c(gene_id, gene_name))                                       #Remove gene_id and gene_name
+normalized_counts <- t(scale(t(normalized_counts)))                                                                   #Scaling and transposing normalized_counts
 
 
-Heatmap(normalized_counts,name = "Z-score", show_row_names = FALSE, cluster_rows = FALSE,
-        top_annotation = HeatmapAnnotation("Response" = CRC_annotation$response))
+Heatmap(normalized_counts,name = "Z-score", show_row_names = FALSE, cluster_rows = FALSE,                      
+        top_annotation = HeatmapAnnotation("Response" = CRC_annotation$response))                                     #Plotting the heatmap
 ```
 
 
