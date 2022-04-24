@@ -10,9 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Quality Control
-
-
-
 ```{r, echo = FALSE, include=FALSE}
 library(devtools)
 library(ggbiplot)
@@ -120,7 +117,7 @@ response_barplot
 
 ## PCA plotting
 
-PCA plot to see if the two groups (relapse / no relapse) could be seperated by PC1 and PC2. Sadly the two groups could not be seperated as seen by the ellipses. 
+PCA plot to see if the two groups (relapse / no relapse) could be separated by PC1 and PC2. Sadly the two groups could not be separated as seen by the ellipses. 
 ```{r, echo=FALSE, include=FALSE}
 #PCA plotting
 
