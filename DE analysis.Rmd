@@ -33,7 +33,7 @@ library(Glimma)
 #Reading in Counts_table (>50% > 200.000)
 CRC_counts_table <- read.table("Counts_table_DeSeq")
 CRC_annotation <- read.table("Annotation_table")
-CRC_counts_table_gene <- read.table("salmon.merged.gene_counts.tsv") #read_table -> read.table change
+CRC_counts_table_gene <- read_table("salmon.merged.gene_counts.tsv") #read_table -> read.table change
 
 #Modifying annotation table
 CRC_annotation$gender <-  recode(CRC_annotation$gender,"1" = "Male", "2" = "Female")
@@ -145,7 +145,7 @@ sigIHW <- rbind(sigIHW_down,sigIHW_up)                                          
 rownames(sigIHW) <- sigIHW$gene_id
 
 #Getting significant DE gene list + log2foldchange
-CRC_counts_table_gene$gene_id <- gsub('(\\.).*', '', CRC_counts_table_gene$gene_id)                               #Change row_names by removing ensembl ID
+CRC_counts_table_gene$gene_id <- gsub('(\\.).*', '', CRC_counts_table_gene$gene_id)                              #Change row_names by removing ensembl ID
 CRC_gene <- subset(CRC_counts_table_gene, select = c(gene_id, gene_name))
 CRC_gene_sub <- CRC_gene[CRC_gene$gene_id %in% rownames(sigIHW),]
 sigIHW <- cbind(sigIHW, gene_name = CRC_gene_sub$gene_name)
