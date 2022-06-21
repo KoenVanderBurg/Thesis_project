@@ -13,39 +13,35 @@ chunk_output_type: inline
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
-
-
-```{r loading library, echo = FALSE, include=FALSE, message=FALSE, warning=FALSE}
-
 library(clusterProfiler)
 library(enrichplot)
 library(ggplot2)
+library(R.utils)
+library(DOSE)
 
-install.packages("R.utils")
 R.utils::setOption("clusterProfiler.download.method","auto")
 
-# we use ggplot2 to add x axis labels (ex: ridgeplot)
-
-#ET THE DESIRED ORGANISM HERE
+#Select organism
 organism = "org.Hs.eg.db"
-BiocManager::install(organism, character.only = TRUE)
 library(organism, character.only = TRUE)
-
 ```
+
 
 ```{r loading dataframe and prepare input, echo = FALSE, include = FALSE}
 sig_down <- read.table("sigIHW_down.csv", header = TRUE)
-sig_down <- data.frame(sig_down, row.names = sig_down$gene_id)                  #Set row_names -> sample names
-sig_down <- subset(sig_down, select = -(gene_id))                               #Removal total column
-write.csv(sig_down,sep="\t", quote=F, col.names=NA, file.path("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis/Innsbruck_project/Analysis", "sigIHW_down_2.csv"))
-sig_down <- read.csv("sigIHW_down_2.csv", header = TRUE)
+sig_down <- data.frame(sig_down, row.names = sig_down$gene_id)                  
+sig_down <- subset(sig_down, select = -(gene_id))  
+
+write.csv(sig_down,sep="\t", quote=F, col.names=NA,
+          file.path ("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis_project/output_data"), "sigIHW_down.csv")
+
+sig_down <- read.csv("sigIHW_down.csv", header = TRUE)
 
 
 original_gene_list <- sig_down$log2FoldChange                                          
-names(original_gene_list) <- sig_down$X                                 # name the vector
-gene_list<-na.omit(original_gene_list)                                          # omit any NA values 
-gene_list = sort(gene_list, decreasing = TRUE)                                  # sort the list in decreasing order (required for clusterProfiler)
+names(original_gene_list) <- sig_down$X                                         #name the vector
+gene_list<-na.omit(original_gene_list)                                          #omit any NA values 
+gene_list = sort(gene_list, decreasing = TRUE)                                  #sort the list in decreasing order (required for clusterProfiler)
 
 ```
 
@@ -63,23 +59,16 @@ gse <- gseGO(geneList=gene_list,
              pAdjustMethod = "none")
 
 ```
-
-```{r Dotplot, warning = FALSE, message= FALSE}
-
-
-require(DOSE)
-dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign)
-``` 
+ 
 
 ```{r Enrichment Map, warning= FALSE, message = FALSE}
+#Enrichment analysis plots
+dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign)
 cnetplot(gse, categorySize="pvalue", foldChange=gene_list, showCategory = 3)
 ridgeplot(gse) + labs(x = "enrichment distribution")
 
-
 compare_cluster_GO_emap <- enrichplot::pairwise_termsim(gse, semData = gse)
 emapplot(compare_cluster_GO_emap, showCategory = 10)
-
-
 
 ```
 
@@ -88,28 +77,28 @@ emapplot(compare_cluster_GO_emap, showCategory = 10)
 
 
 ```{r Prepare input KEGG, echo= FALSE, include=FALSE}
-# Convert gene IDs for gseKEGG function
-# We will lose some genes here because not all IDs will be converted
+#convert gene IDs for gseKEGG function, lose some genes here because not all IDs will be converted
 ids<-bitr(names(original_gene_list), fromType = "ENSEMBL", toType = "ENTREZID", OrgDb= "org.Hs.eg.db")
- # remove duplicate IDS (here I use "ENSEMBL", but it should be whatever was selected as keyType)
-dedup_ids = ids[!duplicated(ids[c("ENSEMBL")]),]
 
-# Create a new dataframe df2 which has only the genes which were successfully mapped using the bitr function above
-df2 = sig_down[sig_down$X %in% dedup_ids$ENSEMBL,]
+#remove duplicate IDS (here I use "ENSEMBL", but it should be whatever was selected as keyType)
+ids = ids[!duplicated(ids[c("ENSEMBL")]),]
 
-# Create a new column in df2 with the corresponding ENTREZ IDs
-df2$Y = dedup_ids$ENTREZID
+#create a new dataframe mapped_genes which has only the genes which were successfully mapped using the bitr function above
+mapped_genes = sig_down[sig_down$X %in% ids$ENSEMBL,]
 
-# Create a vector of the gene unuiverse
-kegg_gene_list <- df2$log2FoldChange
+#create a new column in mapped_genes with the corresponding ENTREZ IDs
+mapped_genes$Y = ids$ENTREZID
 
-# Name vector with ENTREZ ids
-names(kegg_gene_list) <- df2$Y
+#create a vector of the gene unuiverse
+kegg_gene_list <- mapped_genes$log2FoldChange
 
-# omit any NA values 
+#cnme vector with ENTREZ ids
+names(kegg_gene_list) <- mapped_genes$Y
+
+#omit any NA values 
 kegg_gene_list<-na.omit(kegg_gene_list)
 
-# sort the list in decreasing order (required for clusterProfiler)
+#sort the list in decreasing order (required for clusterProfiler)
 kegg_gene_list = sort(kegg_gene_list, decreasing = TRUE)
 
 ```
@@ -126,6 +115,7 @@ kk2 <- gseKEGG(geneList     = kegg_gene_list,
 ```
 
 ```{r Dotplot, warning= FALSE, message= FALSE}
+#KEGG analysis plots
 cnetplot(kk2, categorySize="pvalue", foldChange=gene_list)
 
 compare_cluster_GO_KEGG <- enrichplot::pairwise_termsim(kk2, semData = kk2)
