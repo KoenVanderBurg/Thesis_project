@@ -1,2 +1,2 @@
 # Thesis_project
- Cohort cancer DE and GO 
+ Pipeline for DE and GO analysis on CRC  tissue
