@@ -1,0 +1,145 @@
+---
+title: "CRC quality control"
+date: 19/08/2021
+output: html_documentj n  h
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Quality Control
+```{r, echo = FALSE, include=FALSE}
+library(devtools)
+library(ggbiplot)
+library(tidyverse)
+library(readxl)
+
+
+#Loading in files
+sample_sheet <- read_excel("sample_sheet.xlsx")
+CRC_dataset <- read_excel("CRC_Stage-III_Salzburg-Cohort_Coded_Relapse-Data_fChristina.xlsx")
+
+#Merging two tables together, based on sample_ID/sample
+full_data <- merge (sample_sheet, CRC_dataset, by.x = "sample", by.y = "Sample ID")
+
+#Select the columns that we want to keep
+keeps <- c ("sample", "fastq_1", "fastq_2", "strandedness","Sex\n[1=male; 2=female]", "Relapse within 3 years\n[0=No; 1=Yes]","Tumor Cell Content\n[minimum]","Tumor Cell Content\n[maximum]")
+full_data_trimmed = full_data[keeps]
+
+#Remove spaces from sample column of the df table.
+full_data_trimmed$sample <- gsub('\\s+', '', full_data_trimmed$sample)
+
+#Creating a filter that shows us a minimum tumor cell content of either 50% or 25%.
+vars <- c("Tumor Cell Content\n[minimum]")
+cond <- c(50, 25)
+
+#Using the filter, can select the condition (50%,25%) for which we want to check.
+annotation_filtered <- full_data_trimmed %>%
+  filter(
+    .data[[vars[[1]]]] >= cond[[1]]
+  )
+#Changing the column names for easier viewing
+colnames(annotation_filtered) <- c('sample','fastq_1','fastq_2', 'strandedness','gender', 'response', 'min_tumor_cell_content','max_tumor_cell_content')
+annotation_filtered_new <- subset(annotation_filtered, select = -(fastq_2))
+#write.table(annotation_filtered_new, file="Annotation_table", quote = F)
+
+#loading in data set
+counts_table <- read_table("salmon.merged.gene_counts.tsv")
+
+#Removing _ from the gene_count_dataset
+colnames(counts_table) <- gsub("_", "", colnames(counts_table))
+
+#Removing samples from gene_count_dataset that don't have the 50% tumor cell count
+keeps <- c("geneid","genename",annotation_filtered$sample)
+counts_table <- counts_table[,keeps]
+
+#Removing the first two columns of the counts_table set
+counts_table_sum <- counts_table[annotation_filtered$sample]
+
+#Summing up the counts for each sample and transposing
+counts_table_sum <- lapply(counts_table_sum, sum, 2)
+counts_table_sum <- t(as.data.frame(counts_table_sum))
+
+
+#Barplot for total counts_table_sum:
+
+#Remove samples that have a count below 200.000
+counts_table_sum <- counts_table_sum[counts_table_sum[, 1] >= 200000, ]
+counts_table_sum <- as.data.frame(counts_table_sum)
+colnames(counts_table_sum) <- c("total_counts")
+
+```
+
+## Total count numbers
+Barplot of total count for each of the samples. Samples have at least 200.00 counts over all the genes and contain at least 50% tumor cell content.
+
+
+```{r barplot, echo = FALSE}
+library(ggplot2)
+#Actual plotting of the barplot
+gene_barplot <- ggplot(data = counts_table_sum)+
+  geom_bar(mapping = aes(x= reorder(rownames(counts_table_sum), -total_counts), y = total_counts), stat = "identity")
+gene_barplot <- gene_barplot + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+gene_barplot + labs(y="Counts", x = "Samples")
+
+``` 
+
+## Tumor cell content
+
+In this barplot the minimum tumor cell content is showed for all the samples. 
+
+```{r, echo=FALSE, include=FALSE}
+
+#Filter out needed columns
+keeps <- c("sample", "response", "min_tumor_cell_content")
+response_df <- annotation_filtered[keeps]
+colnames(response_df) <- c("sample", "response", "min_tumor_cell_content")
+response_df$response <- as.character(response_df$response)
+response_df[response_df == "0"] <- "No relapse"
+response_df[response_df == "1"] <- "Relapse"
+
+#sub-setting out samples with the lower counts
+response_df_sub <- response_df[response_df$sample %in% rownames(counts_table_sum),]
+
+```
+
+```{r Tumor cell content, echo=FALSE}
+#Actual plotting of response barplot
+response_barplot <- ggplot(data = response_df_sub)+
+  geom_bar(mapping = aes(x = reorder(sample, -min_tumor_cell_content), y = min_tumor_cell_content, fill = response), stat = "identity")
+response_barplot <- response_barplot + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs (y = "Min tumor cell content", x = "Samples") +
+  scale_fill_discrete(name = "Relapse", labels = c("Relapse", "No relapse"))
+response_barplot
+```
+
+## PCA plotting
+
+PCA plot to see if the two groups (relapse / no relapse) could be separated by PC1 and PC2. Sadly the two groups could not be separated as seen by the ellipses. 
+```{r, echo=FALSE, include=FALSE}
+#PCA plotting
+
+#Removing samples <200.000
+counts_table_trans <- t(counts_table)
+counts_table_trans <- counts_table_trans[rownames(counts_table_trans) %in% rownames(counts_table_sum),]
+
+counts_table_new <- counts_table
+counts_table_new <- as.data.frame(counts_table_new[,-2])
+rownames(counts_table_new) <- counts_table_new$geneid
+counts_table_new <- counts_table_new[,-1]
+
+counts_table_new <- t(counts_table_new)
+counts_table_new <- as.data.frame(counts_table_new[rownames(counts_table_new) %in% rownames(counts_table_trans),])
+counts_table_new <- log(counts_table_new+1)
+```
+
+
+```{r PCA plot, echo = FALSE}
+  
+counts.pca <- prcomp(counts_table_new) # center =TRUE, scale. = TRUE)
+ggbiplot(counts.pca, var.axes = FALSE, groups = response_df_sub$response, ellipse = TRUE, )
+
+```
+

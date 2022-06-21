@@ -1,0 +1,252 @@
+  ---
+  title: "DE analysis"
+  author: "Koen van der Burg"
+  date: "19/08/2021"
+  output: html_document
+  ---
+
+# DE analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loading library, echo = FALSE, include=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(RColorBrewer)
+library(DEGreport)
+library(ggplot2)
+library(ggrepel)
+library(devtools)
+library(ggbiplot)
+library(readxl)
+library(IHW)
+library(pheatmap)
+library(EnhancedVolcano)
+library(DESeq2)
+library(Glimma)
+library(tidyr)
+```
+
+## Reading in tables and modifying them
+```{r CRC_loading,message=FALSE, warning=FALSE}
+setwd("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis/Innsbruck_project/Analysis/Saved_files")
+
+#Reading in Counts_table (>50% > 200.000)
+CRC_counts_table <- read.table("Counts_table_DeSeq")
+CRC_annotation <- read.table("Annotation_table")
+CRC_counts_table_gene <- read.table("salmon.merged.gene_counts.tsv") #read_table -> read.table change
+
+#Modifying annotation table
+CRC_annotation$gender <-  recode(CRC_annotation$gender,"1" = "Male", "2" = "Female")
+CRC_annotation$response <- recode(CRC_annotation$response, "0" = "No_relapse", "1" = "Relapse")
+CRC_annotation <- CRC_annotation[CRC_annotation$sample %in% colnames(CRC_counts_table),]                #Removal samples that don't have 200.000 counts
+CRC_annotation <- data.frame(CRC_annotation, row.names = CRC_annotation$sample)                         #Set row_names -> sample names
+CRC_annotation <- subset(CRC_annotation, select = c(response,gender,min_tumor_cell_content))            #Removal sample column
+
+#Remove genes that have <2 total count in row
+CRC_counts_table <- cbind(CRC_counts_table, total = rowSums(CRC_counts_table))                          #Create column with total row_counts
+CRC_counts_table <- subset(CRC_counts_table, total > 1)                                                 #Remove rows(genes) with less than 2 counts
+CRC_counts_table <- subset(CRC_counts_table, select = -(total))                                         #Removal total column
+
+#Ensemble version removal and removal of PAR_Y genes.
+CRC_counts_table = CRC_counts_table[!grepl("_Y$",rownames(CRC_counts_table)),]                          #Remove rows that end with the PAR_Y gene_id
+CRC_counts_table$row_names <- row.names(CRC_counts_table)                                               #Set row_names to column_names
+CRC_counts_table$row_names <- gsub('(\\.).*', '', CRC_counts_table$row_names)                           #Change row_names by removing ensemble ID
+CRC_counts_table <- as.data.frame(CRC_counts_table, row.names = CRC_counts_table$row_names)             #Convert back to original state
+CRC_counts_table <- subset(CRC_counts_table, select = -(row_names))                                     #Removal of row_names column
+CRC_counts_table <- as.matrix(round(CRC_counts_table, 0))                                               #Rounding counts to remove decimals
+```
+
+
+## Pre-check DESeq2 
+```{r check, results='hide',message=FALSE, warning=FALSE}
+
+#Check if samples both in counts_table and annotation table, and amount of samples is equal.
+table(colnames(CRC_counts_table) %in% rownames(CRC_annotation)) 
+table(colnames(CRC_counts_table) == rownames(CRC_annotation))
+
+```
+
+## Creating DESeq2 object
+Creating a DESeq2 object, from here we create a normalized counts table. The created dds object which is used later on for PCA plotting and heat map.
+```{r normalized_counts,message=FALSE, warning=FALSE}
+
+#Creating DESeq2Dataset object and creating normalized_counts file for later use.
+dds <- DESeqDataSetFromMatrix(countData = round(CRC_counts_table), colData = CRC_annotation, design = ~ response)
+dds <- estimateSizeFactors(dds)                                                                         #Median of ratios method of normalization
+glimmaMDS(dds)                                                                                          #Interactive plotting
+normalized_counts <- counts(dds, normalized=TRUE)                                                       #Retrieving normalized counts matrix
+#write.table(normalized_counts, file="normalized_counts.txt", sep="\t", quote=F, col.names=NA)          #Creation of normalized_counts file
+```
+
+
+## PCA plots and correlation heatmap
+Coloring on heat map needs to be changed. 
+```{r QC,message=FALSE, warning=FALSE}
+
+rld <- vst(dds, blind=TRUE)                                                                        #Transform (rlog) counts for data visualization (vst faster)
+ 
+plotPCA(rld, intgroup="response")                                                                   #PCA plot: Response    
+plotPCA(rld, intgroup="gender")                                                                     #PCA plot: Gender
+plotPCA(rld, intgroup= "min_tumor_cell_content")                                                    #PCA plot: Min tumor cell
+
+##Heatmap
+rld_mat <- assay(rld)                                                                               #Extract the rlog matrix from the object
+rld_cor <- cor(rld_mat)                                                                             #Compute pairwise correlation values
+CRC_annotation_heatmap <- subset(CRC_annotation, select = (response))                               #Getting response subset for heat map
+pheatmap(rld_cor, annotation_col = CRC_annotation_heatmap, main = "Pairwise correlation values", )  #Plot heat map using the correlation matrix + metadata object
+```
+
+## DESeq2 analysis
+Running the DESeq2 analysis, results derived from Independent Hypothesis Testing (IHW), using a log fold shrinkage. 
+```{r DESeq2,message=FALSE, warning=FALSE}
+
+##Making DESeq2 object
+dds <- DESeqDataSetFromMatrix(countData = round(CRC_counts_table), colData = CRC_annotation, design = ~ response) #Object creation
+dds <- DESeq(dds)                                                                                                 #Run analysis
+
+resIHW <- results(dds, filterFun = ihw)                                                                           #Extracting results using IHW
+resIHW_unshrunken <- resIHW                                                                                       #Save copy of non shrunken results
+resIHW <- lfcShrink(dds, coef= "response_Relapse_vs_No_relapse" , type = "normal")                                #Applying log fold change shrinkage / resultsNames(dds)
+
+```
+
+## Dispersion and MA plots
+```{r MAplot,message=FALSE, warning=FALSE}
+#Plot dispersion estimates
+plotDispEsts(dds, main = "Dispersion plot")
+
+#MA Plot, colored genes are identified as significantly DE
+plotMA(resIHW_unshrunken, ylim=c(-2,2), main = "Unshrunken MA plot")                                              #MA plot using non shrunken fold changes
+plotMA(resIHW, ylim=c(-2,2), main = "LFC MA plot")                                                                #MA plot using shrunken fold changes
+
+```
+
+## Significant DE genes
+The DE genes are cut-off at a adjusted p-value of 0.1 and a log2FoldChange of 1.
+```{r sig_genes,message=FALSE, warning=FALSE}
+
+#Creating a tibble of the results
+resIHW_tb <- resIHW %>%
+  data.frame() %>%
+  rownames_to_column(var="gene_id")%>%
+  as_tibble()
+
+#Subset the tibble to keep only significant genes
+padj.cutoff <- 0.05                                                                                                #Setting thresholds
+log2FoldChange.cutoff.down <- -1 
+log2FoldChange.cutoff.up <- 1
+sigIHW_down <- resIHW_tb %>%                                                                                      #Selection of down_regulated genes
+  filter(log2FoldChange < log2FoldChange.cutoff.down) %>%
+  filter(padj < padj.cutoff)
+sigIHW_up <- resIHW_tb %>%                                                                                        #Selection of up_regulated genes
+  filter(log2FoldChange > log2FoldChange.cutoff.up) %>%
+  filter(padj < padj.cutoff)
+
+sigIHW <- rbind(sigIHW_down,sigIHW_up)                                                                            #Combining all significant genes
+rownames(sigIHW) <- sigIHW$gene_id
+
+#Getting significant DE gene list + log2foldchange
+CRC_counts_table_gene$gene_id <- gsub('(\\.).*', '', CRC_counts_table_gene$gene_id)                              #Change row_names by removing ensembl ID
+CRC_gene <- subset(CRC_counts_table_gene, select = c(gene_id, gene_name))
+CRC_gene_sub <- CRC_gene[CRC_gene$gene_id %in% rownames(sigIHW),]
+sigIHW <- cbind(sigIHW, gene_name = CRC_gene_sub$gene_name)
+sigIHW <- subset(sigIHW, gene_id != "ENSG00000276778")                                                            #Metazoa_SRP change removal
+sigIHW <- subset(sigIHW, gene_id != "ENSG00000277270")                                                            #Metazoa_SRP change removal
+sigIHW <- subset(sigIHW, select = c(log2FoldChange,gene_id, gene_name))
+
+#row.names(sigIHW) <- sigIHW$gene_name
+write.table(sigIHW_down, file="sigIHW_down.txt", sep="\t", quote=F, col.names=NA)
+#write.table(sigIHW_up, file="sigIHW_up.txt", sep="\t", quote=F, col.names=NA)
+#write.table(sigIHW, file="sigIHW.txt", sep="\t", quote=F, col.names=NA)
+write.table(sigIHW_down,sep="\t", quote=F, col.names=NA, file.path("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis/Innsbruck_project", "sigIHW_down.csv"))
+
+
+```   
+
+## Significant DE genes (unshrunken)
+The DE genes are cut-off at a adjusted p-value of 0.1 and a log2FoldChange of 1. Here we used the unshrunken results of the genes. This results in more DE genes. 
+
+```{r sig_genes_unshrunken,message=FALSE, warning=FALSE}
+
+#Creating a tibble of the unsrhunken results
+resIHW_tb_unshrunken <- resIHW_unshrunken %>%
+  data.frame() %>%
+  rownames_to_column(var="gene_id")%>%
+  as_tibble()
+
+#Subset the tibble to keep only significant genes
+padj.cutoff <- 0.05
+log2FoldChange.cutoff.down <- -1 
+log2FoldChange.cutoff.up <- 1
+sigIHW_down_unshrunken <- resIHW_tb_unshrunken %>%
+  filter(log2FoldChange < log2FoldChange.cutoff.down) %>%
+  filter(padj < padj.cutoff)
+sigIHW_up_unshrunken <- resIHW_tb_unshrunken %>%
+  filter(log2FoldChange > log2FoldChange.cutoff.up) %>%
+  filter(padj < padj.cutoff)
+
+sigIHW_unshrunken <- rbind(sigIHW_down_unshrunken,sigIHW_up_unshrunken)
+rownames(sigIHW_unshrunken) <- sigIHW_unshrunken$gene_id
+
+#Getting significant DE gene list + applying log2foldchange
+CRC_gene_sub <- CRC_gene[CRC_gene$gene_id %in% rownames(sigIHW_unshrunken),]
+sigIHW_unshrunken <- cbind(sigIHW_unshrunken, gene_name = CRC_gene_sub$gene_name)
+#row.names(sigIHW_unshrunken) <- sigIHW_unshrunken$gene_name                                                        #‘Metazoa_SRP’, ‘Y_RNA’ duplicates
+sigIHW_unshrunken <- subset(sigIHW_unshrunken, select = c(log2FoldChange,gene_id,gene_name))
+#write.table(sigIHW_down_unshrunken, file="sigIHW_down_unshrunken.txt", sep="\t", quote=F, col.names=NA)
+#write.table(sigIHW_up_unshrunken, file="sigIHW_up_unshrunken.txt", sep="\t", quote=F, col.names=NA)
+#write.table(sigIHW_unshrunken, file="sigIHW_unshrunken.txt", sep="\t", quote=F, col.names=NA)
+
+
+
+```   
+
+## Volcano plotting
+```{r Volcano_plotting, fig.height=10, fig.width=10,message=FALSE, warning=FALSE }
+
+resIHW_join <- merge (x = CRC_gene, y= resIHW_tb, by= "gene_id")
+resIHW_join_unshrunken <- merge (x = CRC_gene, y = resIHW_tb_unshrunken, by= "gene_id")
+
+EnhancedVolcano(resIHW_join,
+                lab = resIHW_join$gene_name,
+                x = 'log2FoldChange',
+                y = 'padj',
+                ylim = c(0,8),
+                drawConnectors = TRUE,
+                pCutoff = 0.05, 
+                FCcutoff = 1
+                )
+EnhancedVolcano(resIHW_join_unshrunken,
+                lab = resIHW_join_unshrunken$gene_name,
+                x = 'log2FoldChange',
+                y = 'padj',
+                ylim = c(0,8),
+                drawConnectors = TRUE,
+                pCutoff = 0.05, 
+                FCcutoff = 1
+                )
+```
+
+
+## DE genes heatmap
+Need to change the colors of to top_annotation. 
+```{r Heatmap,message=FALSE, warning=FALSE}
+library(ComplexHeatmap)
+normalized_counts <- read.table("normalized_counts.txt")                                                              #Load in normalized_counts
+normalized_counts <- cbind(normalized_counts, gene_id = row.names(normalized_counts))                                 
+normalized_counts <- merge (x = CRC_gene, y= normalized_counts, by= "gene_id")                                        #Merge df's by gene_id
+normalized_counts <- normalized_counts[normalized_counts$gene_id %in% sigIHW$gene_id ,]                               #Select significant genes
+normalized_counts <- subset(normalized_counts, gene_id != "ENSG00000274701")                                          #Metazoa_SRP change removal
+normalized_counts <- subset(normalized_counts, gene_id != "ENSG00000277250")              
+row.names(normalized_counts) <- normalized_counts$gene_name
+normalized_counts <- subset(normalized_counts, select = -c(gene_id, gene_name))                                       #Remove gene_id and gene_name
+normalized_counts <- t(scale(t(normalized_counts)))                                                                   #Scaling and transposing normalized_counts
+
+
+Heatmap(normalized_counts,name = "Z-score", show_row_names = FALSE, cluster_rows = FALSE,                   
+        top_annotation = HeatmapAnnotation("Response" = CRC_annotation$response))                                     #Plotting the heatmap
+```
+
+
