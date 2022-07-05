@@ -76,11 +76,14 @@ dds <- DESeqDataSetFromMatrix(countData = round(CRC_counts_table), colData = CRC
 dds <- estimateSizeFactors(dds)                                                                         #median of ratios method of normalization
 normalized_counts <- counts(dds, normalized=TRUE)                                                       #retrieving normalized counts matrix
 
+
 #interactive plotting
-#glimmaMDS(dds)                                                                                         
+#glimmaMDS(dds)         
+
 
 #creation of normalized_counts file
 #write.table(normalized_counts, file="normalized_counts.txt", sep="\t", quote=F, col.names=NA, file.path ("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis_project/output_data"))  
+
 ```
 
 
@@ -157,6 +160,8 @@ sigIHW <- subset(sigIHW, select = c(log2FoldChange,gene_id, gene_name))
 #write.table(sigIHW_up, file="sigIHW_up.txt", sep="\t", quote=F, col.names=NA)
 #write.table(sigIHW, file="sigIHW.txt", sep="\t", quote=F, col.names=NA)
 write.csv(sigIHW_down,sep=" ", quote=F, col.names=NA, file.path("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis_project/output_data", "sigIHW_down.csv"))
+
+write.csv(sigIHW_up,sep=" ", quote=F, col.names=NA, file.path("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis_project/output_data", "sigIHW_up.csv"))
 
 #setwd("C:/Users/koenv/OneDrive/Documenten/Universiteit/Bio-informatica Jaar 3/Thesis/Innsbruck_project/Analysis/Saved_files")
 #write.csv(sigIHW_down, sep="\t", quote=F, col.names=NA, "sigIHW_down.csv")
