@@ -91,7 +91,7 @@ In this barplot the minimum tumor cell content is showed for all the samples.
 response_df <- subset(annotation_table, select = c ("sample", "response", "min_tumor_cell_content"))
 colnames(response_df) <- c("sample", "response", "min_tumor_cell_content")
 response_df$response <- as.character(response_df$response)
-response_df$response <- recode(response_df$response,"1" = "Relapse", "2" = "No relapse")
+response_df$response <- recode(response_df$response,"1" = " No Relapse", "0" = "Relapse")
 
 #sub-setting out samples with the lower counts
 response_df <- response_df[response_df$sample %in% rownames(counts_table_sum),]
@@ -111,7 +111,7 @@ response_barplot
 
 ## PCA plotting
 
-PCA plot to see if the two groups (relapse / no relapse) could be separated by PC1 and PC2. Sadly the two groups could not be seperated as seen by the ellipses.
+PCA plot to see if the two groups (relapse / no relapse) could be separated by PC1 and PC2. Sadly the two groups could not be separated as seen by the ellipses.
 
 ```{r, echo=FALSE, include=FALSE}
 #PCA plotting
@@ -133,12 +133,6 @@ counts_table <- log(counts_table+1)
 ```{r PCA plot, echo = FALSE}
   
 counts.pca <- prcomp(counts_table) # center =TRUE, scale. = TRUE)
-ggbiplot(counts.pca, var.axes = FALSE, groups = response_df$response, ellipse = TRUE, )
-
-```
-
-```{r main_function}
-quality_control()
-
+ggbiplot(counts.pca, var.axes = FALSE, groups = response_df$responseAs, ellipse = TRUE, )
 
 ```
