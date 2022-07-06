@@ -22,6 +22,14 @@ library(Glimma)
 library(tidyr)
 library(DOSE)
 
+library(clusterProfiler)
+library(enrichplot)
+library(R.utils)
+R.utils::setOption("clusterProfiler.download.method","auto")
+#set the desired organism here
+organism = "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+
 ```
 
 # Quality Control
@@ -321,21 +329,6 @@ Heatmap(normalized_counts,name = "Z-score", show_row_names = FALSE, cluster_rows
 # GO Analysis
   
 ## Setup library
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(clusterProfiler)
-library(enrichplot)
-library(ggplot2)
-library(R.utils)
-
-R.utils::setOption("clusterProfiler.download.method","auto")
-
-#set the desired organism here
-organism = "org.Hs.eg.db"
-library(organism, character.only = TRUE)
-
-```
 
 
 ```{r loading dataframe and prepare input, echo = FALSE, include = FALSE}
