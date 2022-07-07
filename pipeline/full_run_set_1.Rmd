@@ -50,7 +50,7 @@ library(organism, character.only = TRUE)
   full_data <- merge (sample_sheet, CRC_dataset, by.x = "sample", by.y = "Sample ID")
   
   #Select the columns that we want to keep
-  full_data =  subset(full_data, select = c("sample", "Sex\n[1=male; 2=female]", "Relapse within 3 years\n[0=No; 1=Yes]","Tumor Cell  Content\n[minimum]","Tumor Cell Content\n[maximum]"))
+  full_data =  subset(full_data, select = c("sample", "Sex\n[1=male; 2=female]", "Relapse within 3 years\n[0=No; 1=Yes]","Tumor Cell Content\n[minimum]","Tumor Cell Content\n[maximum]"))
   
   #Changing the column names for easier viewing
   colnames(full_data) <- c('sample','gender', 'response', 'min_tumor_cell_content','max_tumor_cell_content')
