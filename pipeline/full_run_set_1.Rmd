@@ -466,6 +466,7 @@ ids = ids[!duplicated(ids[c("ENSEMBL")]),]
 
 #create a new dataframe mapped_genes which has only the genes which were successfully mapped using the bitr function above
 mapped_genes = sig_down[sig_down$gene_id %in% ids$ENSEMBL,]
+ids = ids[ids$ENSEMBL %in% mapped_genes$gene_id,]
 
 #create a new column in mapped_genes with the corresponding ENTREZ IDs
 mapped_genes$Y = ids$ENTREZID
@@ -496,7 +497,7 @@ KEGG <- gseKEGG(geneList     = kegg_gene_list,
 
 ```{r Plotting, warning= FALSE, message= FALSE}
 #KEGG analysis plots
-dotplot(KEGG, showCategory = 10, title = "Enriched Pathways" , split=".sign") + facet_grid(.~.sign)
+dotplot(KEGG, showCategory = 8, title = "Enriched Pathways" , split=".sign") + facet_grid(.~.sign)
 cnetplot(KEGG, categorySize="pvalue", foldChange=gene_list)
 
 compare_cluster_GO_KEGG <- enrichplot::pairwise_termsim(KEGG, semData = KEGG)
